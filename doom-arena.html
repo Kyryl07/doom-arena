@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>DOOM-арена</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #gameInfo {
+      margin: 10px;
+      text-align: center;
+    }
+
+    canvas {
+      border: 2px solid #555;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameInfo">
+    <div>Керування: WASD – рух, миша – приціл, ЛКМ – стріляти</div>
+    <div>Виживай на арені проти демонів</div>
+  </div>
+
+  <canvas id="game" width="800" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    let isGameOver = false;
+
+    // Гравець
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      size: 20,
+      speed: 3,
+      angle: 0,
+      color: 'lime',
+      hp: 100,
+      maxHp: 100
+    };
+
+    // Вороги і кулі
+    const enemies = [];
+    const enemyBullets = [];
+    const bullets = [];
+
+    // Стіни — арена + перешкоди
+    const walls = [
+      // Рамка арени
+      { x: 50,  y: 50,  width: 700, height: 20 }, // верх
+      { x: 50,  y: 530, width: 700, height: 20 }, // низ
+      { x: 50,  y: 70,  width: 20,  height: 460 }, // ліво
+      { x: 730, y: 70,  width: 20,  height: 460 }, // право
+
+      // Внутрішні перешкоди (арена)
+      { x: 250, y: 200, width: 300, height: 20 },
+      { x: 250, y: 380, width: 300, height: 20 },
+      { x: 200, y: 250, width: 20,  height: 100 },
+      { x: 580, y: 250, width: 20,  height: 100 }
+    ];
+
+    // Перевірка зіткнення з будь-якою стіною для квадрата
+    function isCollidingWithWall(x, y, size) {
+      for (const w of walls) {
+        if (
+          x + size / 2 > w.x &&
+          x - size / 2 < w.x + w.width &&
+          y + size / 2 > w.y &&
+          y - size / 2 < w.y + w.height
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Клавіші
+    const keys = { w: false, a: false, s: false, d: false };
+
+    window.addEventListener('keydown', (e) => {
+      const code = e.code;
+      if (code === 'KeyW') keys.w = true;
+      if (code === 'KeyA') keys.a = true;
+      if (code === 'KeyS') keys.s = true;
+      if (code === 'KeyD') keys.d = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const code = e.code;
+      if (code === 'KeyW') keys.w = false;
+      if (code === 'KeyA') keys.a = false;
+      if (code === 'KeyS') keys.s = false;
+      if (code === 'KeyD') keys.d = false;
+    });
+
+    // Миша
+    const mouse = { x: 0, y: 0 };
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+
+      const dx = mouse.x - player.x;
+      const dy = mouse.y - player.y;
+      player.angle = Math.atan2(dy, dx);
+    });
+
+    canvas.addEventListener('mousedown', () => {
+      shoot();
+    });
+
+    // Постріл гравця
+    function shoot() {
+      if (isGameOver) return;
+
+      const bulletSpeed = 6;
+      bullets.push({
+        x: player.x,
+        y: player.y,
+        size: 5,
+        dx: Math.cos(player.angle) * bulletSpeed,
+        dy: Math.sin(player.angle) * bulletSpeed,
+        color: 'yellow'
+      });
+    }
+
+    // Спавн ворогів різних типів
+    function spawnEnemy() {
+      const type = Math.floor(Math.random() * 5); // 0–4
+      let enemy;
+
+      if (type === 0) {
+        // Швидкий демон
+        enemy = {
+          type: 'fast',
+          size: 20,
+          speed: 3,
+          hp: 3,
+          color: 'orange',
+          alive: true
+        };
+
+      } else if (type === 1) {
+        // Танк
+        enemy = {
+          type: 'tank',
+          size: 40,
+          speed: 0.7,
+          hp: 15,
+          color: 'purple',
+          alive: true
+        };
+
+      } else if (type === 2) {
+        // Стріляючий демон
+        enemy = {
+          type: 'shooter',
+          size: 25,
+          speed: 1.2,
+          hp: 6,
+          color: 'cyan',
+          alive: true,
+          shootCooldown: 0
+        };
+
+      } else if (type === 3) {
+        // Звичайний демон
+        enemy = {
+          type: 'normal',
+          size: 30,
+          speed: 1.8,
+          hp: 8,
+          color: 'red',
+          alive: true
+        };
+
+      } else {
+        // Вибуховий демон
+        enemy = {
+          type: 'exploder',
+          size: 25,
+          speed: 2.2,
+          hp: 4,
+          color: 'rgb(255,50,50)',
+          alive: true,
+          exploding: false,
+          explodeTimer: 0,
+          blink: 0
+        };
+      }
+
+      // Спавн по краях арени
+      const side = Math.floor(Math.random() * 4);
+      if (side === 0) {
+        enemy.x = 100 + Math.random() * 600;
+        enemy.y = 90;
+      } else if (side === 1) {
+        enemy.x = 100 + Math.random() * 600;
+        enemy.y = 510;
+      } else if (side === 2) {
+        enemy.x = 90;
+        enemy.y = 100 + Math.random() * 400;
+      } else {
+        enemy.x = 710;
+        enemy.y = 100 + Math.random() * 400;
+      }
+
+      // Якщо випадково спавниться в стіні — трохи посуваємо
+      if (isCollidingWithWall(enemy.x, enemy.y, enemy.size)) {
+        enemy.y += 30;
+      }
+
+      enemies.push(enemy);
+    }
+
+    setInterval(spawnEnemy, 2000);
+
+    // Рух гравця
+    function updatePlayer() {
+      if (isGameOver) return;
+
+      let moveX = 0;
+      let moveY = 0;
+
+      if (keys.w) moveY -= 1;
+      if (keys.s) moveY += 1;
+      if (keys.a) moveX -= 1;
+      if (keys.d) moveX += 1;
+
+      if (moveX !== 0 || moveY !== 0) {
+        const len = Math.sqrt(moveX * moveX + moveY * moveY);
+        moveX /= len;
+        moveY /= len;
+      }
+
+      let newX = player.x + moveX * player.speed;
+      let newY = player.y + moveY * player.speed;
+
+      // Стінки арени
+      if (!isCollidingWithWall(newX, player.y, player.size)) {
+        player.x = newX;
+      }
+      if (!isCollidingWithWall(player.x, newY, player.size)) {
+        player.y = newY;
+      }
+    }
+
+    // Оновлення ворогів
+    function updateEnemies() {
+      if (isGameOver) return;
+
+      for (const enemy of enemies) {
+        if (!enemy.alive) continue;
+
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        // Звичайний рух (fast, tank, normal)
+        if (enemy.type !== 'shooter' && enemy.type !== 'exploder') {
+          let newX = enemy.x + (dx / dist) * enemy.speed;
+          let newY = enemy.y + (dy / dist) * enemy.speed;
+
+          if (!isCollidingWithWall(newX, enemy.y, enemy.size)) {
+            enemy.x = newX;
+          }
+          if (!isCollidingWithWall(enemy.x, newY, enemy.size)) {
+            enemy.y = newY;
+          }
+        }
+
+        // Стріляючий демон
+        if (enemy.type === 'shooter') {
+          const dirX = dx / dist;
+          const dirY = dy / dist;
+
+          let newX, newY;
+
+          if (dist < 200) {
+            newX = enemy.x - dirX * enemy.speed;
+            newY = enemy.y - dirY * enemy.speed;
+          } else {
+            newX = enemy.x + dirX * enemy.speed;
+            newY = enemy.y + dirY * enemy.speed;
+          }
+
+          if (!isCollidingWithWall(newX, enemy.y, enemy.size)) enemy.x = newX;
+          if (!isCollidingWithWall(enemy.x, newY, enemy.size)) enemy.y = newY;
+
+          enemy.shootCooldown--;
+          if (enemy.shootCooldown <= 0) {
+            shootEnemyBullet(enemy);
+            enemy.shootCooldown = 60;
+          }
+        }
+
+        // 💥 ВИБУХОВИЙ ДЕМОН
+        if (enemy.type === 'exploder') {
+          const dirX = dx / dist;
+          const dirY = dy / dist;
+
+          let newX = enemy.x + dirX * enemy.speed;
+          let newY = enemy.y + dirY * enemy.speed;
+
+          if (!isCollidingWithWall(newX, enemy.y, enemy.size)) enemy.x = newX;
+          if (!isCollidingWithWall(enemy.x, newY, enemy.size)) enemy.y = newY;
+
+          // Якщо близько — запускає вибух
+          if (dist < 60 && !enemy.exploding) {
+            enemy.exploding = true;
+            enemy.explodeTimer = 30;
+          }
+
+          // Миготіння + таймер
+          if (enemy.exploding) {
+            enemy.blink++;
+
+            if (enemy.blink % 6 < 3) {
+              enemy.color = 'white';
+            } else {
+              enemy.color = 'rgb(255,50,50)';
+            }
+
+            enemy.explodeTimer--;
+
+            if (enemy.explodeTimer <= 0) {
+              explode(enemy);
+              enemy.alive = false;
+              continue;
+            }
+          }
+        }
+
+        // Урон від торкання (якщо ворог живий)
+        if (!enemy.alive || (enemy.type === 'exploder' && enemy.exploding)) {
+          continue;
+        }
+
+        const minDist = (player.size + enemy.size) / 2;
+        if (dist < minDist) {
+          const dmg = enemy.type === 'tank' ? 2 : 1;
+          player.hp -= dmg;
+
+          if (player.hp <= 0 && !isGameOver) {
+            player.hp = 0;
+            gameOver();
+            return;
+          }
+        }
+      }
+    }
+
+    // Вибух (для exploder)
+    function explode(enemy) {
+      const dx = player.x - enemy.x;
+      const dy = player.y - enemy.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const explodeRadius = 80;
+
+      if (dist < explodeRadius) {
+        player.hp -= 20;
+
+        if (player.hp <= 0 && !isGameOver) {
+          player.hp = 0;
+          gameOver();
+        }
+      }
+    }
+
+    // Кулі гравця
+    function updateBullets() {
+      if (isGameOver) return;
+
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+
+        b.x += b.dx;
+        b.y += b.dy;
+
+        // Вихід за межі
+        if (
+          b.x < 0 || b.x > canvas.width ||
+          b.y < 0 || b.y > canvas.height
+        ) {
+          bullets.splice(i, 1);
+          continue;
+        }
+
+        // Удар у стіну
+        let hitWall = false;
+        for (const w of walls) {
+          if (
+            b.x > w.x &&
+            b.x < w.x + w.width &&
+            b.y > w.y &&
+            b.y < w.y + w.height
+          ) {
+            bullets.splice(i, 1);
+            hitWall = true;
+            break;
+          }
+        }
+        if (hitWall) continue;
+
+        // Попадання у ворога
+        for (const enemy of enemies) {
+          if (!enemy.alive) continue;
+
+          const dx = enemy.x - b.x;
+          const dy = enemy.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const hitDist = (enemy.size / 2) + b.size;
+
+          if (dist < hitDist) {
+            enemy.hp -= 1;
+            bullets.splice(i, 1);
+
+            if (enemy.hp <= 0) enemy.alive = false;
+            break;
+          }
+        }
+      }
+    }
+
+    // Постріл ворога
+    function shootEnemyBullet(enemy) {
+      const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+
+      enemyBullets.push({
+        x: enemy.x,
+        y: enemy.y,
+        dx: Math.cos(angle) * 4,
+        dy: Math.sin(angle) * 4,
+        size: 5,
+        color: 'red'
+      });
+    }
+
+    // Оновлення куль ворогів
+    function updateEnemyBullets() {
+      if (isGameOver) return;
+
+      for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        const b = enemyBullets[i];
+
+        b.x += b.dx;
+        b.y += b.dy;
+
+        // Вихід за межі
+        if (
+          b.x < 0 || b.x > canvas.width ||
+          b.y < 0 || b.y > canvas.height
+        ) {
+          enemyBullets.splice(i, 1);
+          continue;
+        }
+
+        // Удар у стіну
+        let hitWall = false;
+        for (const w of walls) {
+          if (
+            b.x > w.x &&
+            b.x < w.x + w.width &&
+            b.y > w.y &&
+            b.y < w.y + w.height
+          ) {
+            enemyBullets.splice(i, 1);
+            hitWall = true;
+            break;
+          }
+        }
+        if (hitWall) continue;
+
+        // Попадання в гравця
+        const dx = player.x - b.x;
+        const dy = player.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < player.size) {
+          player.hp -= 5;
+
+          if (player.hp <= 0 && !isGameOver) {
+            player.hp = 0;
+            gameOver();
+          }
+
+          enemyBullets.splice(i, 1);
+        }
+      }
+    }
+
+    // HUD
+    function drawHUD() {
+      const barWidth = 200;
+      const barHeight = 20;
+
+      ctx.fillStyle = 'darkred';
+      ctx.fillRect(10, 10, barWidth, barHeight);
+
+      const hpWidth = (player.hp / player.maxHp) * barWidth;
+      ctx.fillStyle = 'lime';
+      ctx.fillRect(10, 10, hpWidth, barHeight);
+
+      ctx.fillStyle = 'white';
+      ctx.font = '16px sans-serif';
+      ctx.fillText(`HP: ${Math.floor(player.hp)} / ${player.maxHp}`, 15, 25);
+    }
+
+    // Малювання
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.angle);
+
+      ctx.fillStyle = player.color;
+      ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
+
+      ctx.fillStyle = 'white';
+      ctx.fillRect(player.size / 2, -3, 10, 6);
+
+      ctx.restore();
+    }
+
+    function drawEnemies() {
+      for (const enemy of enemies) {
+        if (!enemy.alive) continue;
+
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(
+          enemy.x - enemy.size / 2,
+          enemy.y - enemy.size / 2,
+          enemy.size,
+          enemy.size
+        );
+
+        // Максимальне HP для бару (по типу ворога)
+        let maxHp =
+          enemy.type === 'tank' ? 15 :
+          enemy.type === 'fast' ? 3 :
+          enemy.type === 'shooter' ? 6 :
+          enemy.type === 'exploder' ? 4 :
+          8; // normal
+
+        ctx.fillStyle = 'darkred';
+        ctx.fillRect(
+          enemy.x - enemy.size / 2,
+          enemy.y - enemy.size,
+          enemy.size,
+          5
+        );
+
+        ctx.fillStyle = 'lime';
+        ctx.fillRect(
+          enemy.x - enemy.size / 2,
+          enemy.y - enemy.size,
+          (enemy.hp / maxHp) * enemy.size,
+          5
+        );
+      }
+    }
+
+    function drawBullets() {
+      for (const b of bullets) {
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawEnemyBullets() {
+      for (const b of enemyBullets) {
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawWalls() {
+      ctx.fillStyle = '#444';
+      for (const w of walls) {
+        ctx.fillRect(w.x, w.y, w.width, w.height);
+      }
+    }
+
+    // Смерть
+    function gameOver() {
+      isGameOver = true;
+
+      setTimeout(() => {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = 'red';
+        ctx.font = '48px sans-serif';
+        ctx.fillText('Ти загинув', canvas.width / 2 - 120, canvas.height / 2);
+
+        ctx.fillStyle = 'white';
+        ctx.font = '24px sans-serif';
+        ctx.fillText('Онови сторінку, щоб почати заново', canvas.width / 2 - 220, canvas.height / 2 + 40);
+      }, 50);
+    }
+
+    // Головний цикл
+    function gameLoop() {
+      if (isGameOver) {
+        return;
+      }
+
+      updatePlayer();
+      updateEnemies();
+      updateBullets();
+      updateEnemyBullets();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawWalls();
+      drawPlayer();
+      drawEnemies();
+      drawBullets();
+      drawEnemyBullets();
+      drawHUD();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
