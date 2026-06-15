@@ -4,14 +4,100 @@
   <meta charset="UTF-8">
   <title>DOOM-арена</title>
   <style>
-    body {
+    * {
       margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
       background: #111;
       color: #fff;
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    #menuScreen {
+      text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
+      gap: 20px;
+    }
+
+    #gameContainer {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 48px;
+      color: lime;
+      text-shadow: 0 0 20px lime;
+      margin-bottom: 30px;
+    }
+
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      min-width: 200px;
+    }
+
+    button {
+      padding: 15px 30px;
+      font-size: 18px;
+      background: #222;
+      color: #0f0;
+      border: 2px solid #0f0;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #0f0;
+      color: #111;
+      box-shadow: 0 0 20px #0f0;
+      transform: scale(1.05);
+    }
+
+    button:active {
+      transform: scale(0.95);
+    }
+
+    .language-selector {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .lang-btn {
+      padding: 8px 15px;
+      font-size: 14px;
+      background: #333;
+      color: #888;
+      border: 1px solid #555;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .lang-btn.active {
+      background: #0f0;
+      color: #111;
+      border-color: #0f0;
+      box-shadow: 0 0 10px #0f0;
+    }
+
+    .lang-btn:hover {
+      background: #444;
+      border-color: #0f0;
     }
 
     #gameInfo {
@@ -24,21 +110,168 @@
       background: #000;
       box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
     }
+
+    .back-button {
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-  <div id="gameInfo">
-    <div>Керування: WASD – рух, миша – приціл, ЛКМ – стріляти</div>
-    <div>Виживай на арені проти демонів</div>
+  <div id="menuScreen">
+    <h1>⚡ DOOM-ARENA ⚡</h1>
+    <div class="menu-buttons">
+      <button onclick="startGame()">▶ ПОЧАТИ ГРУ</button>
+      <button onclick="showInstructions()">ℹ ЯК ГРАТИ</button>
+      <button onclick="showScores()">🏆 РЕКОРДИ</button>
+    </div>
+
+    <div class="language-selector">
+      <button class="lang-btn active" onclick="setLanguage('uk')">🇺🇦 Українська</button>
+      <button class="lang-btn" onclick="setLanguage('en')">🇬🇧 English</button>
+    </div>
+
+    <div id="infoScreen" style="display: none; max-width: 500px;">
+      <h2 id="infoTitle"></h2>
+      <p id="infoText" style="text-align: left; line-height: 1.6;"></p>
+      <button class="back-button" onclick="backToMenu()">← НАЗАД</button>
+    </div>
   </div>
 
-  <canvas id="game" width="800" height="600"></canvas>
+  <div id="gameContainer">
+    <div id="gameInfo">
+      <div id="gameControls">Керування: WASD – рух, миша – приціл, ЛКМ – стріляти</div>
+      <div id="gameTip">Виживай на арені проти демонів</div>
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+    <button class="back-button" onclick="backToMenu()" id="backFromGame">← МЕНЮ</button>
+  </div>
 
   <script>
+    // 🌐 МОВИ
+    let currentLanguage = 'uk';
+
+    const translations = {
+      uk: {
+        title: '⚡ DOOM-ARENA ⚡',
+        startGame: '▶ ПОЧАТИ ГРУ',
+        howToPlay: 'ℹ ЯК ГРАТИ',
+        scores: '🏆 РЕКОРДИ',
+        back: '← НАЗАД',
+        controls: 'Керування: WASD – рух, миша – приціл, ЛКМ – стріляти',
+        tip: 'Виживай на арені проти демонів',
+        instructionsTitle: 'ЯК ГРАТИ',
+        instructions: `КЕРУВАННЯ:
+• WASD - рух героя
+• МИША - приціл (герой дивиться на курсор)
+• ЛКМ - стріляти
+
+ВОРОГ:
+• Червоний (обичний) - базовий враг
+• Оранжевий (швидкий) - швидкий але слабкий
+• Фіолетовий (танк) - повільний але міцний
+• Ціан (стріляючий) - утримується на відстані
+• Червоний (вибуховий) - вибухає при наближенні
+
+ЦІЛЬ:
+Виживай якомога довше! Не допусти демонам торкнутися тебе!`,
+        scoresTitle: '🏆 РЕКОРДИ',
+        scoresEmpty: 'Рекордів ще немає. Грай гру!',
+        menu: '← МЕНЮ'
+      },
+      en: {
+        title: '⚡ DOOM-ARENA ⚡',
+        startGame: '▶ START GAME',
+        howToPlay: 'ℹ HOW TO PLAY',
+        scores: '🏆 HIGH SCORES',
+        back: '← BACK',
+        controls: 'Controls: WASD - move, mouse - aim, LMB - shoot',
+        tip: 'Survive the arena against demons',
+        instructionsTitle: 'HOW TO PLAY',
+        instructions: `CONTROLS:
+• WASD - move your character
+• MOUSE - aim (character looks at cursor)
+• LMB - shoot
+
+ENEMIES:
+• Red (normal) - basic enemy
+• Orange (fast) - fast but weak
+• Purple (tank) - slow but strong
+• Cyan (shooter) - keeps distance and shoots
+• Red (exploder) - explodes when near you
+
+GOAL:
+Survive as long as possible! Don't let demons touch you!`,
+        scoresTitle: '🏆 HIGH SCORES',
+        scoresEmpty: 'No scores yet. Play the game!',
+        menu: '← MENU'
+      }
+    };
+
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      updateMenuText();
+    }
+
+    function updateMenuText() {
+      const t = translations[currentLanguage];
+      document.querySelector('h1').textContent = t.title;
+      document.querySelectorAll('.menu-buttons button')[0].textContent = t.startGame;
+      document.querySelectorAll('.menu-buttons button')[1].textContent = t.howToPlay;
+      document.querySelectorAll('.menu-buttons button')[2].textContent = t.scores;
+      if (document.getElementById('gameControls')) {
+        document.getElementById('gameControls').textContent = t.controls;
+        document.getElementById('gameTip').textContent = t.tip;
+      }
+    }
+
+    function showInstructions() {
+      const t = translations[currentLanguage];
+      document.getElementById('menuScreen').innerHTML = `
+        <div id="infoScreen" style="display: block; max-width: 600px;">
+          <h2>${t.instructionsTitle}</h2>
+          <p id="infoText" style="text-align: left; line-height: 1.8; white-space: pre-wrap;">${t.instructions}</p>
+          <button class="back-button" onclick="backToMenu()">← ${t.back}</button>
+        </div>
+      `;
+    }
+
+    function showScores() {
+      const t = translations[currentLanguage];
+      const scores = JSON.parse(localStorage.getItem('doomArenaScores')) || [];
+      const scoresText = scores.length > 0 
+        ? scores.map((s, i) => `${i + 1}. ${s.time}s - ${s.kills} kills`).join('\n')
+        : t.scoresEmpty;
+      
+      document.getElementById('menuScreen').innerHTML = `
+        <div id="infoScreen" style="display: block; max-width: 600px;">
+          <h2>${t.scoresTitle}</h2>
+          <p id="infoText" style="text-align: left; line-height: 1.8; white-space: pre-wrap;">${scoresText}</p>
+          <button class="back-button" onclick="backToMenu()">← ${t.back}</button>
+        </div>
+      `;
+    }
+
+    function backToMenu() {
+      location.reload();
+    }
+
+    function startGame() {
+      document.getElementById('menuScreen').style.display = 'none';
+      document.getElementById('gameContainer').style.display = 'flex';
+      updateMenuText();
+      gameLoop();
+    }
+
+    // ============ ГРОВОЙ КОД ============
+
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
 
     let isGameOver = false;
+    let gameStartTime = Date.now();
+    let killCount = 0;
 
     // 🔊 ПРОСТАЯ ЗВУКОВА СИСТЕМА
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -95,7 +328,7 @@
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.vy += 0.2; // Гравітація
+        this.vy += 0.2;
         this.life--;
       }
 
@@ -152,7 +385,7 @@
       color: 'lime',
       hp: 100,
       maxHp: 100,
-      damageFlash: 0 // Для червоного спалаху при урані
+      damageFlash: 0
     };
 
     // Вороги і кулі
@@ -160,22 +393,18 @@
     const enemyBullets = [];
     const bullets = [];
 
-    // Стіни — арена + перешкоди
+    // Стіни
     const walls = [
-      // Рамка арены
-      { x: 50,  y: 50,  width: 700, height: 20 }, // верх
-      { x: 50,  y: 530, width: 700, height: 20 }, // низ
-      { x: 50,  y: 70,  width: 20,  height: 460 }, // ліво
-      { x: 730, y: 70,  width: 20,  height: 460 }, // право
-
-      // Внутрішні перешкоди (арена)
+      { x: 50,  y: 50,  width: 700, height: 20 },
+      { x: 50,  y: 530, width: 700, height: 20 },
+      { x: 50,  y: 70,  width: 20,  height: 460 },
+      { x: 730, y: 70,  width: 20,  height: 460 },
       { x: 250, y: 200, width: 300, height: 20 },
       { x: 250, y: 380, width: 300, height: 20 },
       { x: 200, y: 250, width: 20,  height: 100 },
       { x: 580, y: 250, width: 20,  height: 100 }
     ];
 
-    // Перевірка зіткнення з будь-якою стіною для квадрата
     function isCollidingWithWall(x, y, size) {
       for (const w of walls) {
         if (
@@ -190,7 +419,6 @@
       return false;
     }
 
-    // Клавіші
     const keys = { w: false, a: false, s: false, d: false };
 
     window.addEventListener('keydown', (e) => {
@@ -209,7 +437,6 @@
       if (code === 'KeyD') keys.d = false;
     });
 
-    // Миша
     const mouse = { x: 0, y: 0 };
 
     canvas.addEventListener('mousemove', (e) => {
@@ -226,7 +453,6 @@
       shoot();
     });
 
-    // Постріл гравця
     function shoot() {
       if (isGameOver) return;
 
@@ -242,7 +468,6 @@
         color: 'yellow'
       });
 
-      // ✨ Частинки при постріл
       for (let i = 0; i < 5; i++) {
         const angle = player.angle + (Math.random() - 0.5) * 0.5;
         const speed = Math.random() * 3 + 1;
@@ -257,13 +482,11 @@
       }
     }
 
-    // Спавн ворогів різних типів
     function spawnEnemy() {
-      const type = Math.floor(Math.random() * 5); // 0–4
+      const type = Math.floor(Math.random() * 5);
       let enemy;
 
       if (type === 0) {
-        // Швидкий демон
         enemy = {
           type: 'fast',
           size: 20,
@@ -272,9 +495,7 @@
           color: 'orange',
           alive: true
         };
-
       } else if (type === 1) {
-        // Танк
         enemy = {
           type: 'tank',
           size: 40,
@@ -283,9 +504,7 @@
           color: 'purple',
           alive: true
         };
-
       } else if (type === 2) {
-        // Стріляючий демон
         enemy = {
           type: 'shooter',
           size: 25,
@@ -295,9 +514,7 @@
           alive: true,
           shootCooldown: 0
         };
-
       } else if (type === 3) {
-        // Звичайний демон
         enemy = {
           type: 'normal',
           size: 30,
@@ -306,9 +523,7 @@
           color: 'red',
           alive: true
         };
-
       } else {
-        // Вибуховий демон
         enemy = {
           type: 'exploder',
           size: 25,
@@ -322,7 +537,6 @@
         };
       }
 
-      // Спавн по краях арени
       const side = Math.floor(Math.random() * 4);
       if (side === 0) {
         enemy.x = 100 + Math.random() * 600;
@@ -338,7 +552,6 @@
         enemy.y = 100 + Math.random() * 400;
       }
 
-      // Якщо випадково спавниться в стіні — трохи посуваємо
       if (isCollidingWithWall(enemy.x, enemy.y, enemy.size)) {
         enemy.y += 30;
       }
@@ -346,9 +559,10 @@
       enemies.push(enemy);
     }
 
-    setInterval(spawnEnemy, 2000);
+    setInterval(() => {
+      if (!isGameOver) spawnEnemy();
+    }, 2000);
 
-    // Рух гравця
     function updatePlayer() {
       if (isGameOver) return;
 
@@ -365,7 +579,6 @@
         moveX /= len;
         moveY /= len;
 
-        // ✨ Сліди при русі
         particles.push(new Particle(
           player.x + (Math.random() - 0.5) * 10,
           player.y + (Math.random() - 0.5) * 10,
@@ -379,7 +592,6 @@
       let newX = player.x + moveX * player.speed;
       let newY = player.y + moveY * player.speed;
 
-      // Стінки арены
       if (!isCollidingWithWall(newX, player.y, player.size)) {
         player.x = newX;
       }
@@ -390,7 +602,6 @@
       player.damageFlash = Math.max(0, player.damageFlash - 1);
     }
 
-    // Оновлення ворогів
     function updateEnemies() {
       if (isGameOver) return;
 
@@ -401,7 +612,6 @@
         const dy = player.y - enemy.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-        // Звичайний рух (fast, tank, normal)
         if (enemy.type !== 'shooter' && enemy.type !== 'exploder') {
           let newX = enemy.x + (dx / dist) * enemy.speed;
           let newY = enemy.y + (dy / dist) * enemy.speed;
@@ -414,7 +624,6 @@
           }
         }
 
-        // Стріляючий демон
         if (enemy.type === 'shooter') {
           const dirX = dx / dist;
           const dirY = dy / dist;
@@ -439,7 +648,6 @@
           }
         }
 
-        // 💥 ВИБУХОВИЙ ДЕМОН
         if (enemy.type === 'exploder') {
           const dirX = dx / dist;
           const dirY = dy / dist;
@@ -450,13 +658,11 @@
           if (!isCollidingWithWall(newX, enemy.y, enemy.size)) enemy.x = newX;
           if (!isCollidingWithWall(enemy.x, newY, enemy.size)) enemy.y = newY;
 
-          // Якщо близько — запускає вибух
           if (dist < 60 && !enemy.exploding) {
             enemy.exploding = true;
             enemy.explodeTimer = 30;
           }
 
-          // Миготіння + таймер
           if (enemy.exploding) {
             enemy.blink++;
 
@@ -476,7 +682,6 @@
           }
         }
 
-        // Урон від торкання (якщо ворог живий)
         if (!enemy.alive || (enemy.type === 'exploder' && enemy.exploding)) {
           continue;
         }
@@ -497,7 +702,6 @@
       }
     }
 
-    // Вибух (для exploder)
     function explode(enemy) {
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
@@ -506,10 +710,8 @@
 
       sounds.explode();
 
-      // 🌊 Хвиля вибуху
       shockwaves.push(new Shockwave(enemy.x, enemy.y, explodeRadius));
 
-      // ✨ Частинки вибуху
       for (let i = 0; i < 20; i++) {
         const angle = (Math.PI * 2 * i) / 20;
         const speed = Math.random() * 4 + 2;
@@ -528,7 +730,6 @@
         player.damageFlash = 15;
         sounds.playerHit();
 
-        // 💥 Частинки урану
         for (let i = 0; i < 10; i++) {
           const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x) + (Math.random() - 0.5) * 1;
           const speed = Math.random() * 3 + 1;
@@ -549,7 +750,6 @@
       }
     }
 
-    // Кулі гравця
     function updateBullets() {
       if (isGameOver) return;
 
@@ -559,7 +759,6 @@
         b.x += b.dx;
         b.y += b.dy;
 
-        // Вихід за межі
         if (
           b.x < 0 || b.x > canvas.width ||
           b.y < 0 || b.y > canvas.height
@@ -568,7 +767,6 @@
           continue;
         }
 
-        // Удар у стіну
         let hitWall = false;
         for (const w of walls) {
           if (
@@ -577,7 +775,6 @@
             b.y > w.y &&
             b.y < w.y + w.height
           ) {
-            // ✨ Спалах при ударі в стіну
             particles.push(new Particle(
               b.x + (Math.random() - 0.5) * 10,
               b.y + (Math.random() - 0.5) * 10,
@@ -594,7 +791,6 @@
         }
         if (hitWall) continue;
 
-        // Попадання у ворога
         for (const enemy of enemies) {
           if (!enemy.alive) continue;
 
@@ -607,7 +803,6 @@
             enemy.hp -= 1;
             sounds.hit();
 
-            // ✨ Спалах при попаданні + частинки
             for (let j = 0; j < 8; j++) {
               const angle = (Math.PI * 2 * j) / 8 + (Math.random() - 0.5) * 0.5;
               const speed = Math.random() * 2 + 1;
@@ -625,9 +820,9 @@
 
             if (enemy.hp <= 0) {
               enemy.alive = false;
+              killCount++;
               sounds.enemyDeath();
 
-              // 💥 Частинки при смерті ворога
               for (let j = 0; j < 15; j++) {
                 const angle = Math.random() * Math.PI * 2;
                 const speed = Math.random() * 3 + 1;
@@ -649,7 +844,6 @@
       }
     }
 
-    // Постріл ворога
     function shootEnemyBullet(enemy) {
       const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
 
@@ -663,7 +857,6 @@
       });
     }
 
-    // Оновлення куль ворогів
     function updateEnemyBullets() {
       if (isGameOver) return;
 
@@ -673,7 +866,6 @@
         b.x += b.dx;
         b.y += b.dy;
 
-        // Вихід за межі
         if (
           b.x < 0 || b.x > canvas.width ||
           b.y < 0 || b.y > canvas.height
@@ -682,7 +874,6 @@
           continue;
         }
 
-        // Удар у стіну
         let hitWall = false;
         for (const w of walls) {
           if (
@@ -698,7 +889,6 @@
         }
         if (hitWall) continue;
 
-        // Попадання в гравця
         const dx = player.x - b.x;
         const dy = player.y - b.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -708,7 +898,6 @@
           player.damageFlash = 15;
           sounds.playerHit();
 
-          // 💥 Червоні частинки при урану
           for (let j = 0; j < 6; j++) {
             const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 1;
             const speed = Math.random() * 2 + 1;
@@ -732,7 +921,6 @@
       }
     }
 
-    // Оновлення частинок
     function updateParticles() {
       for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].update();
@@ -742,7 +930,6 @@
       }
     }
 
-    // Оновлення хвиль
     function updateShockwaves() {
       for (let i = shockwaves.length - 1; i >= 0; i--) {
         shockwaves[i].update();
@@ -752,7 +939,6 @@
       }
     }
 
-    // HUD
     function drawHUD() {
       const barWidth = 200;
       const barHeight = 20;
@@ -765,17 +951,20 @@
       ctx.fillRect(10, 10, hpWidth, barHeight);
 
       ctx.fillStyle = 'white';
-      ctx.font = '16px sans-serif';
+      ctx.font = '16px Arial';
       ctx.fillText(`HP: ${Math.floor(player.hp)} / ${player.maxHp}`, 15, 25);
+
+      // Таймер
+      const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+      ctx.fillText(`Time: ${elapsed}s`, canvas.width - 150, 25);
+      ctx.fillText(`Kills: ${killCount}`, canvas.width - 150, 50);
     }
 
-    // Малювання
     function drawPlayer() {
       ctx.save();
       ctx.translate(player.x, player.y);
       ctx.rotate(player.angle);
 
-      // 🔴 Червоний спалах при урану
       if (player.damageFlash > 0) {
         ctx.fillStyle = `rgba(255, 0, 0, ${player.damageFlash / 15})`;
         ctx.fillRect(-player.size / 2 - 3, -player.size / 2 - 3, player.size + 6, player.size + 6);
@@ -802,13 +991,12 @@
           enemy.size
         );
 
-        // Максимальне HP для бару (по типу ворога)
         let maxHp =
           enemy.type === 'tank' ? 15 :
           enemy.type === 'fast' ? 3 :
           enemy.type === 'shooter' ? 6 :
           enemy.type === 'exploder' ? 4 :
-          8; // normal
+          8;
 
         ctx.fillStyle = 'darkred';
         ctx.fillRect(
@@ -853,39 +1041,41 @@
       }
     }
 
-    // Малювання частинок та хвиль
     function drawEffects() {
-      // Хвилі вибуху
       for (const sw of shockwaves) {
         sw.draw(ctx);
       }
 
-      // Частинки
       for (const p of particles) {
         p.draw(ctx);
       }
     }
 
-    // Смерть
     function gameOver() {
       isGameOver = true;
       sounds.gameOver();
+
+      const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+      const score = { time: elapsed, kills: killCount };
+      const scores = JSON.parse(localStorage.getItem('doomArenaScores')) || [];
+      scores.push(score);
+      scores.sort((a, b) => b.time - a.time);
+      localStorage.setItem('doomArenaScores', JSON.stringify(scores.slice(0, 10)));
 
       setTimeout(() => {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.fillStyle = 'red';
-        ctx.font = '48px sans-serif';
-        ctx.fillText('Ти загинув', canvas.width / 2 - 120, canvas.height / 2);
+        ctx.font = '48px Arial';
+        ctx.fillText('ТИ ЗАГИНУВ', canvas.width / 2 - 150, canvas.height / 2 - 20);
 
         ctx.fillStyle = 'white';
-        ctx.font = '24px sans-serif';
-        ctx.fillText('Онови сторінку, щоб почати заново', canvas.width / 2 - 220, canvas.height / 2 + 40);
+        ctx.font = '24px Arial';
+        ctx.fillText(`Time: ${elapsed}s | Kills: ${killCount}`, canvas.width / 2 - 140, canvas.height / 2 + 40);
       }, 50);
     }
 
-    // Головний цикл
     function gameLoop() {
       updatePlayer();
       updateEnemies();
@@ -909,7 +1099,7 @@
       }
     }
 
-    gameLoop();
+    updateMenuText();
   </script>
 </body>
 </html>
